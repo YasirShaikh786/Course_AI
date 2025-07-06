@@ -11,8 +11,8 @@ import logging
 load_dotenv()
 
 # Initialize services
-model_service = ModelService()
 vector_store_service = VectorStoreService()
+model_service = ModelService(vector_store_service=vector_store_service)
 learning_analytics_service = LearningAnalyticsService()
 document_processor = DocumentProcessor()
 logger = logging.getLogger(__name__)

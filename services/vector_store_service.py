@@ -1,6 +1,6 @@
 import faiss
 import numpy as np
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from typing import List, Dict, Any, Optional
 import os
 import json
@@ -168,19 +168,49 @@ class VectorStoreService:
             logger.error(f"Error in similarity search: {str(e)}")
             raise
 
-    def get_relevant_context(self, query: str, k: int = 3) -> str:
+    def get_relevant_context(self, query: str, k: int = 3, max_context_length: int = 3000) -> str:
         """
-        Get relevant context for a query by searching similar documents.
+        Get optimized relevant context for a query with length management.
         
         Args:
             query: The search query
             k: Number of similar documents to consider
+            max_context_length: Maximum character length for returned context
             
         Returns:
-            Combined relevant context from top matches
+            Combined and prioritized relevant context from top matches
         """
-        results = self.similarity_search(query, k=k)
-        return "\n\n".join([res['text'] for res in results])
+        try:
+            # Get similarity search results
+            results = self.similarity_search(query, k=k)
+        
+            if not results:
+                return "No relevant context found."
+        
+            # Prioritize results by score (highest first)
+            sorted_results = sorted(results, key=lambda x: x.get('score', 0), reverse=True)
+        
+            # Build context intelligently
+            context_parts = []
+            current_length = 0
+        
+            for result in sorted_results:
+                text = result['text']
+                if current_length + len(text) > max_context_length:
+                    remaining_space = max_context_length - current_length
+                    if remaining_space > 100:  # Only add if there's meaningful space left
+                        # Add the most relevant part of this result
+                        context_parts.append(text[:remaining_space])
+                    break
+                context_parts.append(text)
+                current_length += len(text)
+        
+            # Join with separators that help the model understand context breaks
+            return "CONTEXT BREAK\n\n".join(context_parts)
+    
+        except Exception as e:
+            logger.error(f"Error getting relevant context: {str(e)}")
+            return "Error retrieving context. Please try again."
 
     def _save_index(self):
         """Save the current index and metadata to disk"""
